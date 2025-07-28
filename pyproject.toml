@@ -1,0 +1,19 @@
+[project]
+name = "py-napcat"
+version = "0.1.0"
+description = "Default template for PDM package"
+authors = [
+    { name = "Half_nothing", email = "Half_nothing@163.com" },
+]
+dependencies = ["loguru>=0.7.3", "websockets>=15.0.1"]
+requires-python = ">=3.12"
+readme = "README.md"
+license = { text = "MIT" }
+
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
+
+[tool.pdm]
+distribution = true

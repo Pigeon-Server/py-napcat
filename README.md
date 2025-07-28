@@ -1,1 +1,1 @@
-# py-napcat
+# python-napcatbot
