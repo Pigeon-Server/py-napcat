@@ -5,14 +5,23 @@ description = "Default template for PDM package"
 authors = [
     { name = "Half_nothing", email = "Half_nothing@163.com" },
 ]
-dependencies = ["loguru>=0.7.3", "websockets>=15.0.1"]
+dependencies = [
+    "loguru>=0.7.3",
+    "websockets>=15.0.1",
+    "async-event-bus>=0.2.0"
+]
 requires-python = ">=3.12"
 readme = "README.md"
 license = { text = "MIT" }
 
+[project.optional-dependencies]
+dev = [
+    "setuptools>=80.9.0",
+]
+
 [build-system]
-requires = ["pdm-backend"]
-build-backend = "pdm.backend"
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
 
 
 [tool.pdm]
