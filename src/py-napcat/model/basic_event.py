@@ -15,6 +15,7 @@ class Serializable(ABC):
 
 
 class PostType(Enum):
+    META = "meta_event"
     MESSAGE = "message"
     MESSAGE_SENT = "message_sent"
     NOTICE = "notice"
