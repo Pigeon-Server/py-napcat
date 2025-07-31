@@ -4,7 +4,7 @@ from typing import Optional
 from .basic_event import PostType, BasicEvent
 from .element import Element
 from .sender import GroupSender, FriendSender
-from ..factory import MessageFactory
+from .message_factory import MessageFactory
 
 
 class MessageType(Enum):

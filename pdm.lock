@@ -5,14 +5,14 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:d04bdd1f89653649a8431f06fc8a1c7ed409cc152bedaad1bf4574afae9764c1"
+content_hash = "sha256:dfa665f824dde181b445df509b7ab53d105fab89dffb62e5477dbfdac4623944"
 
 [[metadata.targets]]
 requires_python = ">=3.12"
 
 [[package]]
 name = "async-event-bus"
-version = "0.2.0"
+version = "0.3.0"
 requires_python = ">=3.12"
 summary = "A simple python event bus for python3"
 groups = ["default"]
@@ -20,8 +20,8 @@ dependencies = [
     "loguru>=0.7.3",
 ]
 files = [
-    {file = "async_event_bus-0.2.0-py3-none-any.whl", hash = "sha256:9e81aed4cd60adde7f404e7f30d7df80e791332fc74b8c15d9f9bc60b2c8d8ba"},
-    {file = "async_event_bus-0.2.0.tar.gz", hash = "sha256:d96ee261715f2ea812dbef1ef3eaba8c16ccab6fe37ed057c7331069e52cae28"},
+    {file = "async_event_bus-0.3.0-py3-none-any.whl", hash = "sha256:ae59ea583578f3f5dbbb9e5bfa8f41619acaf501d3b654185c6f22ee0fb2f7aa"},
+    {file = "async_event_bus-0.3.0.tar.gz", hash = "sha256:67bbbc1822ab84f30102dc9b2592c81ccb7a9ab8070ebc5459513d9092e3486f"},
 ]
 
 [[package]]

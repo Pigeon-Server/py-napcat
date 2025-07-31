@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 
+from async_event_bus import AbstractEvent
+
 
 class Serializable(ABC):
     @abstractmethod
@@ -23,7 +25,7 @@ class PostType(Enum):
 
 
 @dataclass
-class BasicEvent(Serializable):
+class BasicEvent(Serializable, AbstractEvent):
     time: int
     post_type: PostType
     self_id: int

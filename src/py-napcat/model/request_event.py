@@ -35,6 +35,16 @@ class RequestEvent(BasicEvent):
         return cls(json_dict["time"], json_dict["self_id"], RequestType(json_dict["request_type"]),
                    json_dict["flag"], json_dict["user_id"], json_dict["comment"])
 
+    @staticmethod
+    def parse_request_event(data: dict) -> RequestEvent:
+        match RequestType(data["request_type"]):
+            case RequestType.FRIEND:
+                return FriendRequestEvent.from_json(data)
+            case RequestType.GROUP:
+                return GroupRequestEvent.from_json(data)
+            case _:
+                raise ValueError(f"Unknown request type {data['request_type']}")
+
 
 class FriendRequestEvent(RequestEvent):
     def __init__(self, time: int, self_id: int, flag: str, user_id: int, comment: str) -> None:
