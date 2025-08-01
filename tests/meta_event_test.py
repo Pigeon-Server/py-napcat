@@ -2,7 +2,7 @@ from typing import Type
 
 import pytest
 
-from py_napcat.model.meta_event import HeartbeatEvent, LifeCycleEvent, MetaEvent
+from Hcatbot.model.meta_event import HeartbeatEvent, LifeCycleEvent, MetaEvent
 
 
 @pytest.mark.parametrize("data, expected_class", [

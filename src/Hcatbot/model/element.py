@@ -106,7 +106,6 @@ class TextElement(Element):
         text: str
 
         def __post_init__(self) -> None:
-            assert self.text is not None
             assert isinstance(self.text, str)
 
         def to_json(self) -> dict:
@@ -160,7 +159,6 @@ class AtElement(Element):
         target_user_id: str
 
         def __post_init__(self) -> None:
-            assert self.target_user_id is not None
             assert isinstance(self.target_user_id, str)
 
         def to_json(self) -> dict:
@@ -214,7 +212,6 @@ class ReplyElement(Element):
         target_message_id: str
 
         def __post_init__(self) -> None:
-            assert self.target_message_id is not None
             assert isinstance(self.target_message_id, str)
 
         def to_json(self) -> dict:
@@ -274,7 +271,6 @@ class FaceElement(Element):
         chain_count: Optional[int] = None
 
         def __post_init__(self) -> None:
-            assert self.id is not None
             assert isinstance(self.id, str)
 
         def to_json(self) -> dict:
@@ -341,8 +337,6 @@ class MFaceElement(Element):
         summary: Optional[str] = None
 
         def __post_init__(self) -> None:
-            assert self.emoji_id is not None
-            assert self.emoji_package_id is not None
             assert isinstance(self.emoji_id, str)
             assert isinstance(self.emoji_package_id, str)
 
@@ -532,8 +526,6 @@ class PokeElement(Element):
         id: str
 
         def __post_init__(self) -> None:
-            assert self.id is not None
-            assert self.type is not None
             assert isinstance(self.type, str)
             assert isinstance(self.id, str)
 
@@ -615,7 +607,6 @@ class ImageElement(Element):
         emoji_package_id: Optional[str] = None
 
         def __post_init__(self) -> None:
-            assert self.file is not None
             assert isinstance(self.file, str)
 
         def to_json(self) -> dict:
@@ -705,7 +696,6 @@ class RecordElement(Element):
         path: Optional[str] = None
 
         def __post_init__(self) -> None:
-            assert self.file is not None
             assert isinstance(self.file, str)
 
         def to_json(self) -> dict:
@@ -767,7 +757,6 @@ class VideoElement(Element):
         thumb: Optional[str] = None
 
         def __post_init__(self) -> None:
-            assert self.file is not None
             assert isinstance(self.file, str)
 
         def to_json(self) -> dict:
@@ -842,7 +831,6 @@ class FileElement(Element):
         name: Optional[str] = None
 
         def __post_init__(self) -> None:
-            assert self.file is not None
             assert isinstance(self.file, str)
 
         def to_json(self) -> dict:
@@ -911,7 +899,6 @@ class JsonElement(Element):
         data: str
 
         def __post_init__(self):
-            assert self.data is not None
             assert isinstance(self.data, str)
 
         def to_json(self) -> dict:
@@ -988,9 +975,9 @@ class MusicElement(Element):
 
         def __post_init__(self):
             if self.platform_type == MusicElement.MusicPlatform.CUSTOM:
-                assert self.url is not None and self.image is not None
+                assert isinstance(self.url, str) and isinstance(self.image, str)
             else:
-                assert self.id is not None
+                assert isinstance(self.id, str)
 
         def to_json(self) -> dict:
             data = {"type": self.platform_type.value}
@@ -1088,7 +1075,6 @@ class ForwardElement(Element):
         content: Optional[list[Element]] = None
 
         def __post_init__(self) -> None:
-            assert self.id is not None
             assert isinstance(self.id, str)
 
         def to_json(self) -> dict:

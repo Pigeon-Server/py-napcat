@@ -2,7 +2,7 @@ from typing import Type
 
 import pytest
 
-from py_napcat import DiceElement, Element, FaceElement, ForwardElement, ImageElement, PokeElement, RPSElement, \
+from Hcatbot import DiceElement, Element, FaceElement, ForwardElement, ImageElement, PokeElement, RPSElement, \
     ReplyElement, TextElement
 
 

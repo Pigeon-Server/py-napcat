@@ -18,6 +18,10 @@ class MetaEvent(BasicEvent, ABC):
     _event_parser_registry: ClassVar[dict[MetaType, Type["MetaEvent"]]] = {}
     meta_event_type: MetaType
 
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        assert isinstance(self.meta_event_type, MetaType)
+
     @classmethod
     def register_event_parser(cls, event: MetaType):
         def decorator(event_parser_class: Type["MetaEvent"]):
@@ -54,8 +58,6 @@ class HeartbeatEvent(MetaEvent):
         good: bool
 
         def __post_init__(self) -> None:
-            assert self.online is not None
-            assert self.good is not None
             assert isinstance(self.online, bool)
             assert isinstance(self.good, bool)
 
@@ -72,6 +74,11 @@ class HeartbeatEvent(MetaEvent):
 
     status: HeartbeatStatus
     interval: int
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        assert isinstance(self.status, self.HeartbeatStatus)
+        assert isinstance(self.interval, int)
 
     @classmethod
     def from_json(cls, json_dict: dict) -> "MetaEvent":
@@ -97,6 +104,10 @@ class LifeCycleEvent(MetaEvent):
         CONNECT = "connect"
 
     sub_type: LifeCycleType
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        assert isinstance(self.sub_type, self.LifeCycleType)
 
     @classmethod
     def from_json(cls, json_dict: dict) -> "MetaEvent":

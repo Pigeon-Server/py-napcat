@@ -18,6 +18,10 @@ class FriendSender(Serializable):
     nickname: str
     group_id: Optional[int]
 
+    def __post_init__(self) -> None:
+        assert isinstance(self.user_id, int)
+        assert isinstance(self.nickname, str)
+
     def to_json(self) -> dict:
         raise NonSerializableError(f"This class is non-serializable")
 
@@ -37,6 +41,11 @@ class GroupSender(Serializable):
     nickname: str
     role: UserRole
     card: Optional[str]
+
+    def __post_init__(self) -> None:
+        assert isinstance(self.user_id, int)
+        assert isinstance(self.nickname, str)
+        assert isinstance(self.role, UserRole)
 
     def to_json(self) -> dict:
         raise NonSerializableError(f"This class is non-serializable")

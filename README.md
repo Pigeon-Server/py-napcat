@@ -1,4 +1,4 @@
-# python-napcatbot
+# Hcatbot
 
 A python lib for easy use [napcat bot](https://napneko.github.io/)
 

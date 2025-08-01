@@ -27,7 +27,7 @@ class MessageEvent(BasicEvent, ABC):
     raw_message: str
 
     def __post_init__(self) -> None:
-        assert None not in [self.message_type, self.message_id, self.user_id, self.font, self.raw_message, self.message]
+        super().__post_init__()
         assert isinstance(self.message_type, MessageType)
         assert isinstance(self.message_id, int)
         assert isinstance(self.user_id, int)
@@ -92,7 +92,6 @@ class GroupMessageEvent(MessageEvent):
 
     def __post_init__(self) -> None:
         super().__post_init__()
-        assert None not in [self.sub_type, self.group_id, self.sender]
         assert isinstance(self.sub_type, self.GroupMessageType)
         assert isinstance(self.group_id, int)
         assert isinstance(self.sender, GroupSender)
@@ -150,7 +149,6 @@ class FriendMessageEvent(MessageEvent):
 
     def __post_init__(self) -> None:
         super().__post_init__()
-        assert None not in [self.sub_type, self.sender]
         assert isinstance(self.sub_type, self.FriendMessageType)
         assert isinstance(self.sender, FriendSender)
 

@@ -2,8 +2,8 @@ from typing import Type
 
 import pytest
 
-from py_napcat import BasicEvent
-from py_napcat.model.message_event import FriendMessageEvent, GroupMessageEvent, MessageEvent
+from Hcatbot import BasicEvent
+from Hcatbot.model.message_event import FriendMessageEvent, GroupMessageEvent, MessageEvent
 
 
 @pytest.mark.parametrize("data, expected_class, expected_message", [

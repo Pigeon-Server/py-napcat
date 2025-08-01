@@ -1,5 +1,5 @@
 [project]
-name = "py-napcat"
+name = "Hcatbot"
 version = "0.1.0"
 description = "Default template for PDM package"
 authors = [
