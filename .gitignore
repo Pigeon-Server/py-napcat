@@ -5,4 +5,4 @@ __pypackages__/
 .venv/
 .idea/
 **egg-info/
-dest/
+dist/

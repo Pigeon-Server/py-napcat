@@ -1,11 +1,10 @@
-from abc import ABC
+from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass
 from enum import Enum
-from platform import platform
-from typing import Any, Optional, Union, overload
+from typing import Any, Optional, Type, Union, overload
 
 from .basic_event import Serializable
-from .exception import ParameterError, SendElementOnlyError
+from .exception import ParameterError, ParseError, SendElementOnlyError, UnregisteredElementError
 
 
 class ElementType(Enum):
@@ -41,16 +40,24 @@ class Element(Serializable, ABC):
     """
     element_type: ElementType
     element_data: Serializable
+    _element_registry: dict[ElementType, Type["Element"]] = {}
 
     def __init__(self, element_type: ElementType, element_data: Serializable) -> None:
         self.element_type = element_type
         self.element_data = element_data
 
+    @abstractmethod
+    @property
+    def text(self) -> str:
+        raise NotImplementedError
+
+    @classmethod
+    @abstractmethod
+    def from_json(cls, json_dict: dict) -> "Element":
+        raise NotImplementedError
+
     def to_json(self) -> dict:
-        return {
-            "type": self.element_type.value,
-            "data": self.element_data.to_json(),
-        }
+        return {"type": self.element_type.value, "data": self.element_data.to_json()}
 
     def __str__(self) -> str:
         return f"{self.__class__.__name__}(type={self.element_type.value}, data={self.element_data})"
@@ -58,53 +65,36 @@ class Element(Serializable, ABC):
     def __repr__(self) -> str:
         return str(self)
 
-    @staticmethod
-    def parse_element(data: dict) -> "Element":
+    @classmethod
+    def register_element(cls, element_type: ElementType):
+        def decorator(element_class: Type["Element"]):
+            cls._element_registry[element_type] = element_class
+            return element_class
+
+        return decorator
+
+    @classmethod
+    def parse_element(cls, data: dict) -> "Element":
         try:
             element_type = ElementType(data["type"])
+            element_data = data["data"]
         except KeyError as e:
             raise ParameterError(f"Missing required field: {e}") from e
-        except TypeError as e:
+        except ValueError as e:
             raise ParameterError(f"Unknown element type: {data["type"]}") from e
-        element_data = data["data"]
-        match element_type:
-            case ElementType.TEXT:
-                return TextElement.from_json(element_data)
-            case ElementType.AT:
-                return AtElement.from_json(element_data)
-            case ElementType.REPLY:
-                return ReplyElement.from_json(element_data)
-            case ElementType.FACE:
-                return FaceElement.from_json(element_data)
-            case ElementType.MFACE:
-                return MFaceElement.from_json(element_data)
-            case ElementType.DICE:
-                return DiceElement.from_json(element_data)
-            case ElementType.RPS:
-                return RPSElement.from_json(element_data)
-            case ElementType.POKE:
-                return PokeElement.from_json(element_data)
-            case ElementType.IMAGE:
-                return ImageElement.from_json(element_data)
-            case ElementType.RECORD:
-                return RecordElement.from_json(element_data)
-            case ElementType.VIDEO:
-                return VideoElement.from_json(element_data)
-            case ElementType.FILE:
-                return FileElement.from_json(element_data)
-            case ElementType.JSON:
-                return JsonElement.from_json(element_data)
-            case ElementType.MUSIC:
-                return MusicElement.from_json(element_data)
-            case ElementType.FORWARD:
-                return ForwardElement.from_json(element_data)
-            case _:
-                raise ValueError(f"Unknown element type: {element_type}")
+        if cls := cls._element_registry.get(element_type):
+            try:
+                return cls.from_json(element_data)
+            except Exception as e:
+                raise ParseError(f"Failed to parse {element_type.value} element") from e
+
+        raise UnregisteredElementError(f"No parser registered for element type: {element_type.value}")
 
 
+@Element.register_element(ElementType.TEXT)
 class TextElement(Element):
     """
-    纯文本
+    纯文本消息
     """
 
     @dataclass
@@ -115,21 +105,32 @@ class TextElement(Element):
         """
         text: str
 
+        def __post_init__(self) -> None:
+            assert self.text is not None
+            assert isinstance(self.text, str)
+
         def to_json(self) -> dict:
             return {"text": self.text}
 
         @classmethod
         def from_json(cls, json_dict: dict) -> "TextElement.TextElementData":
             try:
-                return cls(json_dict["text"])
+                return cls(text=json_dict["text"])
             except KeyError as e:
                 raise ValueError(f"Missing required field: {e}") from e
+
+        def __str__(self) -> str:
+            return f"{self.__class__.__name__}(text={self.text})"
 
     element_data: TextElementData
 
     def __init__(self, data: Union[str, TextElementData]) -> None:
+        """
+        构建一条纯文本消息
+        :param data: 消息内容,可以直接传入消息字符串,也可以传入TextElementData对象
+        """
         if isinstance(data, str):
-            super().__init__(ElementType.TEXT, self.TextElementData(data))
+            super().__init__(ElementType.TEXT, self.TextElementData(text=data))
         elif isinstance(data, self.TextElementData):
             super().__init__(ElementType.TEXT, data)
         else:
@@ -139,7 +140,12 @@ class TextElement(Element):
     def from_json(cls, json_dict: dict) -> "TextElement":
         return cls(cls.TextElementData.from_json(json_dict))
 
+    @property
+    def text(self) -> str:
+        return self.element_data.text
 
+
+@Element.register_element(ElementType.AT)
 class AtElement(Element):
     """
     At消息
@@ -149,9 +155,13 @@ class AtElement(Element):
     class AtElementData(Serializable):
         """
         Attributes:
-            target_user_id(int): 要@的QQ号，"all"表示@全体成员(=)
+            target_user_id(int): 要@的QQ号,"all"表示@全体成员(=)
         """
         target_user_id: str
+
+        def __post_init__(self) -> None:
+            assert self.target_user_id is not None
+            assert isinstance(self.target_user_id, str)
 
         def to_json(self) -> dict:
             return {"qq": self.target_user_id}
@@ -159,15 +169,22 @@ class AtElement(Element):
         @classmethod
         def from_json(cls, json_dict: dict) -> "AtElement.AtElementData":
             try:
-                return cls(json_dict["qq"])
+                return cls(target_user_id=json_dict["qq"])
             except KeyError as e:
                 raise ValueError(f"Missing required field: {e}") from e
+
+        def __str__(self) -> str:
+            return f"{self.__class__.__name__}(qq={self.target_user_id})"
 
     element_data: AtElementData
 
     def __init__(self, data: Union[str, AtElementData]) -> None:
+        """
+        构建一条At消息
+        :param data: At的目标,可以直接传入字符串,表示目标QQ号,也可以传入AtElementData对象
+        """
         if isinstance(data, str):
-            super().__init__(ElementType.AT, self.AtElementData(data))
+            super().__init__(ElementType.AT, self.AtElementData(target_user_id=data))
         elif isinstance(data, self.AtElementData):
             super().__init__(ElementType.AT, data)
         else:
@@ -177,7 +194,12 @@ class AtElement(Element):
     def from_json(cls, json_dict: dict) -> "AtElement":
         return cls(cls.AtElementData.from_json(json_dict))
 
+    @property
+    def text(self) -> str:
+        return f"@{self.element_data.target_user_id}"
 
+
+@Element.register_element(ElementType.REPLY)
 class ReplyElement(Element):
     """
     回复消息
@@ -191,21 +213,32 @@ class ReplyElement(Element):
         """
         target_message_id: str
 
+        def __post_init__(self) -> None:
+            assert self.target_message_id is not None
+            assert isinstance(self.target_message_id, str)
+
         def to_json(self) -> dict:
             return {"id": self.target_message_id}
 
         @classmethod
         def from_json(cls, json_dict: dict) -> "ReplyElement.ReplyElementData":
             try:
-                return cls(json_dict["id"])
+                return cls(target_message_id=json_dict["id"])
             except KeyError as e:
                 raise ValueError(f"Missing required field: {e}") from e
+
+        def __str__(self) -> str:
+            return f"{self.__class__.__name__}(id={self.target_message_id})"
 
     element_data: ReplyElementData
 
     def __init__(self, data: Union[str, ReplyElementData]) -> None:
+        """
+        构建一条回复消息
+        :param data: 目标消息的消息ID或者ReplyElementData对象
+        """
         if isinstance(data, str):
-            super().__init__(ElementType.REPLY, self.ReplyElementData(data))
+            super().__init__(ElementType.REPLY, self.ReplyElementData(target_message_id=data))
         elif isinstance(data, self.ReplyElementData):
             super().__init__(ElementType.REPLY, data)
         else:
@@ -215,10 +248,15 @@ class ReplyElement(Element):
     def from_json(cls, json_dict: dict) -> "ReplyElement":
         return cls(cls.ReplyElementData.from_json(json_dict))
 
+    @property
+    def text(self) -> str:
+        return f"[回复]({self.element_data.target_message_id})"
 
+
+@Element.register_element(ElementType.FACE)
 class FaceElement(Element):
     """
-    QQ内置表情
+    QQ内置表情消息
     """
 
     @dataclass
@@ -235,22 +273,36 @@ class FaceElement(Element):
         result_id: Optional[str] = None
         chain_count: Optional[int] = None
 
+        def __post_init__(self) -> None:
+            assert self.id is not None
+            assert isinstance(self.id, str)
+
         def to_json(self) -> dict:
             return {"id": self.id}
 
         @classmethod
         def from_json(cls, json_dict: dict) -> "FaceElement.FaceElementData":
             try:
-                return cls(json_dict["id"], json_dict.get("raw"), json_dict.get("result_id"),
-                           json_dict.get("chain_count"))
+                return cls(id=json_dict["id"],
+                           raw=json_dict.get("raw"),
+                           result_id=json_dict.get("result_id"),
+                           chain_count=json_dict.get("chain_count"))
             except KeyError as e:
                 raise ValueError(f"Missing required field: {e}") from e
+
+        def __str__(self) -> str:
+            return (f"{self.__class__.__name__}(id={self.id}, raw={self.raw}, result_id={self.result_id}, "
+                    f"chain_count={self.chain_count})")
 
     element_data: FaceElementData
 
     def __init__(self, data: Union[str, FaceElementData]) -> None:
+        """
+        构建一条QQ内置表情消息
+        :param data: 表情ID或者FaceElementData对象
+        """
         if isinstance(data, str):
-            super().__init__(ElementType.FACE, self.FaceElementData(data))
+            super().__init__(ElementType.FACE, self.FaceElementData(id=data))
         elif isinstance(data, self.FaceElementData):
             super().__init__(ElementType.FACE, data)
         else:
@@ -260,10 +312,15 @@ class FaceElement(Element):
     def from_json(cls, json_dict: dict) -> "FaceElement":
         return cls(cls.FaceElementData.from_json(json_dict))
 
+    @property
+    def text(self) -> str:
+        return f"[表情]({self.element_data.id})"
 
+
+@Element.register_element(ElementType.MFACE)
 class MFaceElement(Element):
     """
-    QQ商城表情
+    QQ商城表情消息
     """
 
     @dataclass
@@ -280,15 +337,29 @@ class MFaceElement(Element):
         key: Optional[str] = None
         summary: Optional[str] = None
 
+        def __post_init__(self) -> None:
+            assert self.emoji_id is not None
+            assert self.emoji_package_id is not None
+            assert isinstance(self.emoji_id, str)
+            assert isinstance(self.emoji_package_id, str)
+
         def to_json(self) -> dict:
             return {k: v for k, v in asdict(self).items() if v is not None}
 
         @classmethod
         def from_json(cls, json_dict: dict) -> "MFaceElement.MFaceElementData":
             try:
-                return cls(json_dict["emoji_id"], json_dict["emoji_package_id"], json_dict.get("key"))
+                return cls(emoji_id=json_dict["emoji_id"],
+                           emoji_package_id=json_dict["emoji_package_id"],
+                           key=json_dict.get("key"))
             except KeyError as e:
                 raise ValueError(f"Missing required field: {e}") from e
+
+        def __str__(self) -> str:
+            return (f"{self.__class__.__name__}(emoji_id={self.emoji_id}, emoji_package_id={self.emoji_package_id}, "
+                    f"key={self.key}, summary={self.summary})")
+
+    element_data: MFaceElementData
 
     @overload
     def __init__(self, data: MFaceElementData) -> None:
@@ -301,9 +372,20 @@ class MFaceElement(Element):
 
     def __init__(self, data: Union[str, MFaceElementData], emoji_package_id: Optional[str] = None,
                  key: Optional[str] = None, summary: Optional[str] = None) -> None:
+        """
+        构造一条QQ商城表情消息
+        :param data: 表情ID或者MFaceElementData对象
+        :param emoji_package_id: 表情包ID,当data参数是字符串类型的时候此参数必须被提供
+        :param key: 表情key
+        :param summary: 表情名称
+        """
         if isinstance(data, str):
             if emoji_package_id is not None:
-                super().__init__(ElementType.MFACE, self.MFaceElementData(data, emoji_package_id, key, summary))
+                super().__init__(ElementType.MFACE,
+                                 self.MFaceElementData(emoji_id=data,
+                                                       emoji_package_id=emoji_package_id,
+                                                       key=key,
+                                                       summary=summary))
             else:
                 raise ParameterError(f"Argument 'emoji_package_id' should be provided when data is string type")
         elif isinstance(data, self.MFaceElementData):
@@ -315,7 +397,12 @@ class MFaceElement(Element):
     def from_json(cls, json_dict: dict) -> "MFaceElement":
         return cls(cls.MFaceElementData.from_json(json_dict))
 
+    @property
+    def text(self) -> str:
+        return f"[表情]({self.element_data.emoji_id})"
 
+
+@Element.register_element(ElementType.DICE)
 class DiceElement(Element):
     """
     骰子表情
@@ -335,11 +422,20 @@ class DiceElement(Element):
         @classmethod
         def from_json(cls, json_dict: dict) -> "DiceElement.DiceElementData":
             try:
-                return cls(json_dict["result"])
+                return cls(result=json_dict["result"])
             except KeyError as e:
                 raise ValueError(f"Missing required field: {e}") from e
 
+        def __str__(self) -> str:
+            return f"{self.__class__.__name__}(result={self.result})"
+
+    element_data: DiceElementData
+
     def __init__(self, data: Optional[DiceElementData] = None) -> None:
+        """
+        构建一条骰子消息
+        :param data: 发送时请不要传递参数
+        """
         if data is None:
             super().__init__(ElementType.DICE, self.DiceElementData())
         elif isinstance(data, self.DiceElementData):
@@ -351,7 +447,12 @@ class DiceElement(Element):
     def from_json(cls, json_dict: dict) -> "DiceElement":
         return cls(cls.DiceElementData.from_json(json_dict))
 
+    @property
+    def text(self) -> str:
+        return f"[骰子]({self.element_data.result})"
 
+
+@Element.register_element(ElementType.RPS)
 class RPSElement(Element):
     """
     石头剪刀布表情
@@ -376,13 +477,22 @@ class RPSElement(Element):
         @classmethod
         def from_json(cls, json_dict: dict) -> "RPSElement.RPSElementData":
             try:
-                return cls(RPSElement.RPSResult(json_dict["result"]))
+                return cls(result=RPSElement.RPSResult(json_dict["result"]))
             except KeyError as e:
                 raise ValueError(f"Missing required field: {e}") from e
             except ValueError as e:
                 raise ValueError(f"Result not in dict: {json_dict['result']}, {e}") from e
 
+        def __str__(self) -> str:
+            return f"{self.__class__.__name__}(result={self.result})"
+
+    element_data: RPSElementData
+
     def __init__(self, data: Optional[RPSElementData] = None) -> None:
+        """
+        构建一条石头剪刀布消息
+        :param data: 发送时请不要传递参数
+        """
         if data is None:
             super().__init__(ElementType.RPS, self.RPSElementData())
         elif isinstance(data, self.RPSElementData):
@@ -394,7 +504,12 @@ class RPSElement(Element):
     def from_json(cls, json_dict: dict) -> "RPSElement":
         return cls(cls.RPSElementData.from_json(json_dict))
 
+    @property
+    def text(self) -> str:
+        return f"[石头剪刀布]({self.element_data.result})"
 
+
+@Element.register_element(ElementType.POKE)
 class PokeElement(Element):
     """
     戳一戳消息
@@ -411,15 +526,27 @@ class PokeElement(Element):
         type: str
         id: str
 
+        def __post_init__(self) -> None:
+            assert self.id is not None
+            assert self.type is not None
+            assert isinstance(self.type, str)
+            assert isinstance(self.id, str)
+
         def to_json(self) -> dict:
             return {"type": self.type, "id": self.id}
 
         @classmethod
         def from_json(cls, json_dict: dict) -> "PokeElement.PokeElementData":
             try:
-                return cls(json_dict["type"], json_dict["id"])
+                return cls(type=json_dict["type"],
+                           id=json_dict["id"])
             except KeyError as e:
                 raise ValueError(f"Missing required field: {e}") from e
+
+        def __str__(self) -> str:
+            return f"{self.__class__.__name__}(type={self.type}, id={self.id})"
+
+    element_data: PokeElementData
 
     @overload
     def __init__(self, data: PokeElementData) -> None:
@@ -430,9 +557,14 @@ class PokeElement(Element):
         ...
 
     def __init__(self, data: Union[str, PokeElementData], poke_id: Optional[str] = None) -> None:
+        """
+        构建一条戳一戳消息
+        :param data: 戳一戳类型或者PokeElementData对象
+        :param poke_id: 戳一戳ID
+        """
         if isinstance(data, str):
             if poke_id is not None:
-                super().__init__(ElementType.POKE, self.PokeElementData(data, poke_id))
+                super().__init__(ElementType.POKE, self.PokeElementData(type=data, id=poke_id))
             else:
                 raise ParameterError(f"Argument 'poke_id' should be provided when data is str")
         elif isinstance(data, self.PokeElementData):
@@ -444,7 +576,12 @@ class PokeElement(Element):
     def from_json(cls, json_dict: dict) -> "PokeElement":
         return cls(cls.PokeElementData.from_json(json_dict))
 
+    @property
+    def text(self) -> str:
+        return f"[戳一戳]"
 
+
+@Element.register_element(ElementType.IMAGE)
 class ImageElement(Element):
     """
     图片消息
@@ -472,6 +609,10 @@ class ImageElement(Element):
         emoji_id: Optional[str] = None
         emoji_package_id: Optional[str] = None
 
+        def __post_init__(self) -> None:
+            assert self.file is not None
+            assert isinstance(self.file, str)
+
         def to_json(self) -> dict:
             data = {"file": self.file}
             if self.url is not None:
@@ -485,11 +626,21 @@ class ImageElement(Element):
         @classmethod
         def from_json(cls, json_dict: dict) -> "ImageElement.ImageElementData":
             try:
-                return cls(json_dict["file"], json_dict.get("url"), json_dict.get("summary"), json_dict.get("sub_type"),
-                           json_dict.get("file_size"), json_dict.get("key"), json_dict.get("emoji_id"),
-                           json_dict.get("emoji_package_id"))
+                return cls(file=json_dict["file"],
+                           url=json_dict.get("url"),
+                           summary=json_dict.get("summary"),
+                           sub_type=json_dict.get("sub_type"),
+                           file_size=json_dict.get("file_size"),
+                           key=json_dict.get("key"),
+                           emoji_id=json_dict.get("emoji_id"),
+                           emoji_package_id=json_dict.get("emoji_package_id"))
             except KeyError as e:
                 raise ValueError(f"Missing required field: {e}") from e
+
+        def __str__(self) -> str:
+            return (f"{self.__class__.__name__}(file={self.file}, url={self.url}, summary={self.summary}, "
+                    f"sub_type={self.sub_type}, file_size={self.file_size}, key={self.key}, "
+                    f"emoji_id={self.emoji_id}, emoji_package_id={self.emoji_package_id})")
 
     element_data: ImageElementData
 
@@ -499,17 +650,21 @@ class ImageElement(Element):
 
     @overload
     def __init__(self, file: str, url: Optional[str] = None, summary: Optional[str] = None,
-                 sub_type: Optional[str] = None, file_size: Optional[int] = None, key: Optional[str] = None,
-                 emoji_id: Optional[str] = None, emoji_package_id: Optional[str] = None) -> None:
+                 sub_type: Optional[str] = None) -> None:
         ...
 
     def __init__(self, data: Union[str, ImageElementData], url: Optional[str] = None, summary: Optional[str] = None,
-                 sub_type: Optional[str] = None, file_size: Optional[int] = None, key: Optional[str] = None,
-                 emoji_id: Optional[str] = None, emoji_package_id: Optional[str] = None) -> None:
+                 sub_type: Optional[str] = None) -> None:
+        """
+        构建一条图片消息
+        :param data: 图片文件路径、URL或Base64编码或者ImageElementData对象
+        :param url: 图片URL
+        :param summary: 图片描述
+        :param sub_type: 图片子类型
+        """
         if isinstance(data, str):
             super().__init__(ElementType.IMAGE,
-                             self.ImageElementData(data, url, summary, sub_type, file_size,
-                                                   key, emoji_id, emoji_package_id))
+                             self.ImageElementData(file=data, url=url, summary=summary, sub_type=sub_type))
         elif isinstance(data, self.ImageElementData):
             super().__init__(ElementType.IMAGE, data)
         else:
@@ -519,7 +674,12 @@ class ImageElement(Element):
     def from_json(cls, json_dict: dict) -> "ImageElement":
         return cls(cls.ImageElementData.from_json(json_dict))
 
+    @property
+    def text(self) -> str:
+        return f"[图片]"
 
+
+@Element.register_element(ElementType.RECORD)
 class RecordElement(Element):
     """
     语音消息
@@ -537,19 +697,34 @@ class RecordElement(Element):
         file_size: Optional[int] = None
         path: Optional[str] = None
 
+        def __post_init__(self) -> None:
+            assert self.file is not None
+            assert isinstance(self.file, str)
+
         def to_json(self) -> dict:
             return {"file": self.file}
 
         @classmethod
         def from_json(cls, json_dict: dict) -> "RecordElement.RecordElementData":
             try:
-                return cls(json_dict["file"], json_dict.get("file_size"), json_dict.get("path"))
+                return cls(file=json_dict["file"],
+                           file_size=json_dict.get("file_size"),
+                           path=json_dict.get("path"))
             except KeyError as e:
                 raise ValueError(f"Missing required field: {e}") from e
 
+        def __str__(self) -> str:
+            return f"{self.__class__.__name__}(file={self.file}, file_size={self.file_size}, path={self.path})"
+
+    element_data: RecordElementData
+
     def __init__(self, data: Union[str, RecordElementData]) -> None:
+        """
+        构造一条语音消息
+        :param data: 语音文件路径、URL或Base64编码或RecordElementData对象
+        """
         if isinstance(data, str):
-            super().__init__(ElementType.RECORD, self.RecordElementData(data))
+            super().__init__(ElementType.RECORD, self.RecordElementData(file=data))
         elif isinstance(data, self.RecordElementData):
             super().__init__(ElementType.RECORD, data)
         else:
@@ -559,7 +734,12 @@ class RecordElement(Element):
     def from_json(cls, json_dict: dict) -> "RecordElement":
         return cls(cls.RecordElementData.from_json(json_dict))
 
+    @property
+    def text(self) -> str:
+        return f"[语音]"
 
+
+@Element.register_element(ElementType.VIDEO)
 class VideoElement(Element):
     """
     视频消息
@@ -579,6 +759,10 @@ class VideoElement(Element):
         file_size: Optional[int] = None
         thumb: Optional[str] = None
 
+        def __post_init__(self) -> None:
+            assert self.file is not None
+            assert isinstance(self.file, str)
+
         def to_json(self) -> dict:
             data = {"file": self.file}
             if self.thumb:
@@ -588,9 +772,17 @@ class VideoElement(Element):
         @classmethod
         def from_json(cls, json_dict: dict) -> "VideoElement.VideoElementData":
             try:
-                return cls(json_dict["file"], json_dict.get("url"), json_dict.get("file_size"))
+                return cls(file=json_dict["file"],
+                           url=json_dict.get("url"),
+                           file_size=json_dict.get("file_size"))
             except KeyError as e:
                 raise ValueError(f"Missing required field: {e}") from e
+
+        def __str__(self) -> str:
+            return (f"{self.__class__.__name__}(file={self.file}, url={self.url}, file_size={self.file_size}, "
+                    f"thumb={self.thumb})")
+
+    element_data: VideoElementData
 
     @overload
     def __init__(self, data: VideoElementData) -> None:
@@ -601,6 +793,11 @@ class VideoElement(Element):
         ...
 
     def __init__(self, data: Union[str, VideoElementData], thumb: Optional[str] = None) -> None:
+        """
+        构造一条视频消息
+        :param data: 视频文件路径、URL或Base64编码或VideoElementData对象
+        :param thumb: 视频缩略图
+        """
         if isinstance(data, str):
             super().__init__(ElementType.VIDEO, self.VideoElementData(file=data, thumb=thumb))
         elif isinstance(data, self.VideoElementData):
@@ -612,7 +809,12 @@ class VideoElement(Element):
     def from_json(cls, json_dict: dict) -> "VideoElement":
         return cls(cls.VideoElementData.from_json(json_dict))
 
+    @property
+    def text(self) -> str:
+        return f"[视频]"
 
+
+@Element.register_element(ElementType.FILE)
 class FileElement(Element):
     """
     文件消息
@@ -632,6 +834,10 @@ class FileElement(Element):
         file_size: Optional[int] = None
         name: Optional[str] = None
 
+        def __post_init__(self) -> None:
+            assert self.file is not None
+            assert isinstance(self.file, str)
+
         def to_json(self) -> dict:
             data = {"file": self.file}
             if self.name is not None:
@@ -641,9 +847,17 @@ class FileElement(Element):
         @classmethod
         def from_json(cls, json_dict: dict) -> "FileElement.FileElementData":
             try:
-                return cls(json_dict["file"], json_dict.get("file_id"), json_dict.get("file_size"))
+                return cls(file=json_dict["file"],
+                           file_id=json_dict.get("file_id"),
+                           file_size=json_dict.get("file_size"))
             except KeyError as e:
                 raise ValueError(f"Missing required field: {e}") from e
+
+        def __str__(self) -> str:
+            return (f"{self.__class__.__name__}(file={self.file}, file_id={self.file_id}, file_size={self.file_size}, "
+                    f"name={self.name})")
+
+    element_data: FileElementData
 
     @overload
     def __init__(self, data: FileElementData) -> None:
@@ -654,6 +868,11 @@ class FileElement(Element):
         ...
 
     def __init__(self, data: Union[str, FileElementData], name: Optional[str] = None) -> None:
+        """
+        构建一条文件消息
+        :param data: 文件路径、URL或Base64编码或FileElementData对象
+        :param name: 文件名
+        """
         if isinstance(data, str):
             super().__init__(ElementType.FILE, self.FileElementData(file=data, name=name))
         elif isinstance(data, self.FileElementData):
@@ -665,7 +884,12 @@ class FileElement(Element):
     def from_json(cls, json_dict: dict) -> "FileElement":
         return cls(cls.FileElementData.from_json(json_dict))
 
+    @property
+    def text(self) -> str:
+        return f"[文件]"
 
+
+@Element.register_element(ElementType.JSON)
 class JsonElement(Element):
     """
     JSON格式的卡片消息
@@ -679,17 +903,30 @@ class JsonElement(Element):
         """
         data: str
 
+        def __post_init__(self):
+            assert self.data is not None
+            assert isinstance(self.data, str)
+
         def to_json(self) -> dict:
             return {"data": self.data}
 
         @classmethod
         def from_json(cls, json_dict: dict) -> "JsonElement.JsonElementData":
             try:
-                return cls(json_dict["data"])
+                return cls(data=json_dict["data"])
             except KeyError as e:
                 raise ValueError(f"Missing required field: {e}") from e
 
+        def __str__(self) -> str:
+            return f"{self.__class__.__name__}(data={self.data})"
+
+    element_data: JsonElementData
+
     def __init__(self, data: Union[str, JsonElementData]) -> None:
+        """
+        构建一条Json消息
+        :param data: JSON字符串或JsonElementData对象
+        """
         if isinstance(data, str):
             super().__init__(ElementType.JSON, self.JsonElementData(data=data))
         elif isinstance(data, self.JsonElementData):
@@ -701,7 +938,12 @@ class JsonElement(Element):
     def from_json(cls, json_dict: dict) -> "JsonElement":
         return cls(cls.JsonElementData.from_json(json_dict))
 
+    @property
+    def text(self) -> str:
+        return f"[JSON]"
 
+
+@Element.register_element(ElementType.MUSIC)
 class MusicElement(Element):
     """
     音乐分享(仅能发送)
@@ -762,6 +1004,13 @@ class MusicElement(Element):
         def from_json(cls, json_dict: dict) -> "MusicElement":
             raise SendElementOnlyError(f"This element can not be received")
 
+        def __str__(self) -> str:
+            return (f"{self.__class__.__name__}(platform_type={self.platform_type.value}, id={self.id}, "
+                    f"url={self.url}, image={self.image}, singer={self.singer}, "
+                    f"title={self.title}, content={self.content})")
+
+    element_data: MusicElementData
+
     @overload
     def __init__(self, data: MusicElementData) -> None:
         ...
@@ -777,6 +1026,16 @@ class MusicElement(Element):
                  url: Optional[str] = None,
                  image: Optional[str] = None, singer: Optional[str] = None, title: Optional[str] = None,
                  content: Optional[str] = None) -> None:
+        """
+        构建一条音乐分享消息
+        :param data: 音乐平台MusicPlatform或者MusicElementData对象
+        :param music_id: 音乐ID(平台非CUSTOM必填)
+        :param url: 音乐链接(CUSTOM必填)
+        :param image: 封面图片(CUSTOM必填)
+        :param singer: 歌手
+        :param title: 标题
+        :param content: 内容描述
+        """
         if isinstance(data, self.MusicElementData):
             super().__init__(ElementType.MUSIC, data)
         elif isinstance(data, self.MusicPlatform):
@@ -786,12 +1045,13 @@ class MusicElement(Element):
                 if image is None:
                     raise ParameterError(f"Argument 'image' should be provided when data is CUSTOM")
                 super().__init__(ElementType.MUSIC,
-                                 self.MusicElementData(platform_type=data, url=url, image=image, singer=singer,
-                                                       title=title, content=content))
+                                 self.MusicElementData(platform_type=data, url=url, image=image,
+                                                       singer=singer, title=title, content=content))
             else:
                 if music_id is None:
                     raise ParameterError(f"Argument 'music_id' should be provided when data is not CUSTOM")
-                super().__init__(ElementType.MUSIC, self.MusicElementData(platform_type=data, id=music_id))
+                super().__init__(ElementType.MUSIC,
+                                 self.MusicElementData(platform_type=data, id=music_id))
         else:
             raise ParameterError(f"Argument 'data' expected MusicPlatform or MusicElementData, but got {type(data)}")
 
@@ -799,8 +1059,17 @@ class MusicElement(Element):
     def from_json(cls, json_dict: dict) -> "MusicElement":
         raise SendElementOnlyError(f"This element can not be received")
 
+    @property
+    def text(self) -> str:
+        return f"音乐分享"
 
+
+@Element.register_element(ElementType.FORWARD)
 class ForwardElement(Element):
+    """
+    合并消息
+    """
+
     @dataclass
     class ForwardElementData(Serializable):
         """
@@ -810,6 +1079,10 @@ class ForwardElement(Element):
         """
         id: str
         content: Optional[list[Element]] = None
+
+        def __post_init__(self) -> None:
+            assert self.id is not None
+            assert isinstance(self.id, str)
 
         def to_json(self) -> dict:
             return {"id": self.id}
@@ -824,7 +1097,16 @@ class ForwardElement(Element):
             except KeyError as e:
                 raise ValueError(f"Missing required field: {e}") from e
 
+        def __str__(self) -> str:
+            return f"{self.__class__.__name__}(id={self.id}, content={self.content})"
+
+    element_data: ForwardElementData
+
     def __init__(self, data: Union[str, ForwardElementData]) -> None:
+        """
+        构造一条合并消息
+        :param data: 转发消息ID或者ForwardElementData对象
+        """
         if isinstance(data, str):
             super().__init__(ElementType.FORWARD, self.ForwardElementData(id=data))
         elif isinstance(data, self.ForwardElementData):
@@ -835,3 +1117,7 @@ class ForwardElement(Element):
     @classmethod
     def from_json(cls, json_dict: dict) -> "ForwardElement":
         return cls(cls.ForwardElementData.from_json(json_dict))
+
+    @property
+    def text(self) -> str:
+        return f"[合并消息]"
