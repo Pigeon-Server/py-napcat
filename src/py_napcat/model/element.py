@@ -285,8 +285,8 @@ class FaceElement(Element):
             try:
                 return cls(id=json_dict["id"],
                            raw=json_dict.get("raw"),
-                           result_id=json_dict.get("result_id"),
-                           chain_count=json_dict.get("chain_count"))
+                           result_id=json_dict.get("resultId"),
+                           chain_count=json_dict.get("chainCount"))
             except KeyError as e:
                 raise ValueError(f"Missing required field: {e}") from e
 
@@ -314,6 +314,9 @@ class FaceElement(Element):
 
     @property
     def text(self) -> str:
+        if self.element_data.raw is not None and isinstance(self.element_data.raw, dict) and \
+                (text := self.element_data.raw.get("faceText")) is not None and len(text) > 0:
+            return text
         return f"[表情]({self.element_data.id})"
 
 
@@ -349,8 +352,8 @@ class MFaceElement(Element):
         @classmethod
         def from_json(cls, json_dict: dict) -> "MFaceElement.MFaceElementData":
             try:
-                return cls(emoji_id=json_dict["emoji_id"],
-                           emoji_package_id=json_dict["emoji_package_id"],
+                return cls(emoji_id=json_dict["emojiId"],
+                           emoji_package_id=json_dict["emojiPackageId"],
                            key=json_dict.get("key"))
             except KeyError as e:
                 raise ValueError(f"Missing required field: {e}") from e
@@ -399,6 +402,8 @@ class MFaceElement(Element):
 
     @property
     def text(self) -> str:
+        if self.element_data.summary is not None:
+            return self.element_data.summary
         return f"[表情]({self.element_data.emoji_id})"
 
 
@@ -676,6 +681,8 @@ class ImageElement(Element):
 
     @property
     def text(self) -> str:
+        if self.element_data.summary is not None and self.element_data.summary != "":
+            return self.element_data.summary
         return f"[图片]"
 
 
