@@ -46,8 +46,8 @@ class Element(Serializable, ABC):
         self.element_type = element_type
         self.element_data = element_data
 
-    @abstractmethod
     @property
+    @abstractmethod
     def text(self) -> str:
         raise NotImplementedError
 

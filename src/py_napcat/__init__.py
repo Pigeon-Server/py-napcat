@@ -1,7 +1,7 @@
 from .model import *
 
-__VERSION__ = "0.1.0"
-__AUTHOR__ = "Half_nothing"
+__version__ = "0.1.0"
+__author__ = "Half_nothing"
 
 __ALL__ = [
     PostType, BasicEvent, Serializable,
