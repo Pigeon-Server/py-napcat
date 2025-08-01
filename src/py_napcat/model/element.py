@@ -82,9 +82,9 @@ class Element(Serializable, ABC):
             raise ParameterError(f"Missing required field: {e}") from e
         except ValueError as e:
             raise ParameterError(f"Unknown element type: {data["type"]}") from e
-        if cls := cls._element_registry.get(element_type):
+        if target_class := cls._element_registry.get(element_type):
             try:
-                return cls.from_json(element_data)
+                return target_class.from_json(element_data)
             except Exception as e:
                 raise ParseError(f"Failed to parse {element_type.value} element") from e
 
@@ -464,9 +464,9 @@ class RPSElement(Element):
     """
 
     class RPSResult(Enum):
-        STONE = "1"  # 石头
+        CLOTH = "1"  # 布
         SHEARS = "2"  # 剪刀
-        CLOTH = "3"  # 布
+        STONE = "3"  # 石头
 
     @dataclass
     class RPSElementData(Serializable):
@@ -511,7 +511,7 @@ class RPSElement(Element):
 
     @property
     def text(self) -> str:
-        return f"[石头剪刀布]({self.element_data.result})"
+        return f"[石头剪刀布]({self.element_data.result.name})"
 
 
 @Element.register_element(ElementType.POKE)
