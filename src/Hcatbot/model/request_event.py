@@ -1,6 +1,10 @@
+from abc import ABC
+from dataclasses import dataclass
 from enum import Enum
+from typing import ClassVar, Type
 
 from .basic_event import BasicEvent, PostType
+from .exception import ParameterError, ParseError, ParserRegisteredError, UnregisteredEventError
 
 
 class RequestType(Enum):
@@ -8,54 +12,68 @@ class RequestType(Enum):
     GROUP = "group"
 
 
-class RequestEvent(BasicEvent):
+@BasicEvent.register_event_parser(PostType.REQUEST)
+@dataclass(frozen=True)
+class RequestEvent(BasicEvent, ABC):
+    _event_parser_registry: ClassVar[dict[RequestType, Type["RequestEvent"]]] = {}
     request_type: RequestType
     flag: str
     user_id: int
     comment: str
 
-    def __init__(self, time: int, self_id: int, request_type: RequestType, flag: str, user_id: int,
-                 comment: str) -> None:
-        super().__init__(time, PostType.REQUEST, self_id)
-        self.request_type = request_type
-        self.flag = flag
-        self.user_id = user_id
-        self.comment = comment
-
-    def to_json(self) -> dict:
-        data = super().to_json()
-        data["flag"] = self.flag
-        data["user_id"] = self.user_id
-        data["comment"] = self.comment
-        data["request_type"] = self.request_type.value
-        return data
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        assert isinstance(self.request_type, RequestType)
+        assert isinstance(self.flag, str)
+        assert isinstance(self.user_id, int)
+        assert isinstance(self.comment, str)
 
     @classmethod
-    def from_json(cls, json_dict: dict) -> "RequestEvent":
-        return cls(json_dict["time"], json_dict["self_id"], RequestType(json_dict["request_type"]),
-                   json_dict["flag"], json_dict["user_id"], json_dict["comment"])
+    def register_event_parser(cls, event: RequestType):
+        def decorator(event_parser_class: Type["RequestEvent"]):
+            if event in cls._event_parser_registry:
+                raise ParserRegisteredError(f"Parser for {event} already registered")
+            cls._event_parser_registry[event] = event_parser_class
+            return event_parser_class
 
-    @staticmethod
-    def parse_request_event(data: dict) -> RequestEvent:
-        match RequestType(data["request_type"]):
-            case RequestType.FRIEND:
-                return FriendRequestEvent.from_json(data)
-            case RequestType.GROUP:
-                return GroupRequestEvent.from_json(data)
-            case _:
-                raise ValueError(f"Unknown request type {data['request_type']}")
+        return decorator
+
+    @classmethod
+    def parse_event(cls, data: dict) -> "BasicEvent":
+        try:
+            event_type = RequestType(data["request_type"])
+        except KeyError as e:
+            raise ParameterError(f"Missing required field: {e}") from e
+        except ValueError as e:
+            raise ParameterError(f"Unknown event type: {data["request_type"]}") from e
+        if target_class := cls._event_parser_registry.get(event_type):
+            try:
+                return target_class.from_json(data)
+            except Exception as e:
+                raise ParseError(f"Failed to parse {event_type.value} event") from e
+
+        raise UnregisteredEventError(f"No parser registered for event type: {event_type.value}")
 
 
+@RequestEvent.register_event_parser(RequestType.FRIEND)
+@dataclass(frozen=True)
 class FriendRequestEvent(RequestEvent):
-    def __init__(self, time: int, self_id: int, flag: str, user_id: int, comment: str) -> None:
-        super().__init__(time, self_id, RequestType.FRIEND, flag, user_id, comment)
-
     @classmethod
     def from_json(cls, json_dict: dict) -> "FriendRequestEvent":
-        return cls(json_dict["time"], json_dict["self_id"], json_dict["flag"],
-                   json_dict["user_id"], json_dict["comment"])
+        try:
+            return cls(time=json_dict["time"],
+                       self_id=json_dict["self_id"],
+                       post_type=PostType.REQUEST,
+                       request_type=RequestType.FRIEND,
+                       flag=json_dict["flag"],
+                       user_id=json_dict["user_id"],
+                       comment=json_dict["comment"])
+        except KeyError as e:
+            raise ParameterError(f"Missing required field: {e}") from e
 
 
+@RequestEvent.register_event_parser(RequestType.GROUP)
+@dataclass(frozen=True)
 class GroupRequestEvent(RequestEvent):
     class GroupRequestType(Enum):
         ADD = "add"
@@ -64,20 +82,24 @@ class GroupRequestEvent(RequestEvent):
     sub_request_type: GroupRequestType
     group_id: int
 
-    def __init__(self, time: int, self_id: int, flag: str, user_id: int, comment: str,
-                 sub_request_type: GroupRequestType, group_id: int) -> None:
-        super().__init__(time, self_id, RequestType.GROUP, flag, user_id, comment)
-        self.sub_request_type = sub_request_type
-        self.group_id = group_id
-
-    def to_json(self) -> dict:
-        data = super().to_json()
-        data["sub_type"] = self.sub_request_type.value
-        data["group_id"] = self.group_id
-        return data
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        assert isinstance(self.sub_request_type, self.GroupRequestType)
+        assert isinstance(self.group_id, int)
 
     @classmethod
     def from_json(cls, json_dict: dict) -> "GroupRequestEvent":
-        return cls(json_dict["time"], json_dict["self_id"], json_dict["flag"],
-                   json_dict["user_id"], json_dict["comment"],
-                   cls.GroupRequestType(json_dict["sub_type"]), json_dict["group_id"])
+        try:
+            return cls(time=json_dict["time"],
+                       self_id=json_dict["self_id"],
+                       post_type=PostType.REQUEST,
+                       request_type=RequestType.GROUP,
+                       flag=json_dict["flag"],
+                       user_id=json_dict["user_id"],
+                       comment=json_dict["comment"],
+                       sub_request_type=cls.GroupRequestType(json_dict["sub_type"]),
+                       group_id=json_dict["group_id"])
+        except KeyError as e:
+            raise ParameterError(f"Missing required field: {e}") from e
+        except ValueError as e:
+            raise ParameterError(f"Invalid sub type: {e}") from e

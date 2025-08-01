@@ -24,6 +24,7 @@ class NoticeType(Enum):
     POKE = "poke"  # 戳一戳
 
 
+@BasicEvent.register_event_parser(PostType.NOTICE)
 @dataclass(frozen=True)
 class NoticeEvent(BasicEvent, ABC):
     _event_parser_registry: ClassVar[dict[NoticeType, Type["NoticeEvent"]]] = {}
