@@ -22,7 +22,7 @@ class ParseError(CustomError):
         super().__init__(message)
 
 
-class EventReceivedOnlyError(CustomError):
+class NonSerializableError(CustomError):
     def __init__(self, message: str) -> None:
         super().__init__(message)
 

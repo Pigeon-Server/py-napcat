@@ -1,13 +1,9 @@
+from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
 
 from .basic_event import Serializable
-
-
-class UserSex(Enum):
-    MALE = "male"
-    FEMALE = "female"
-    UNKNOWN = "unknown"
+from .exception import NonSerializableError, ParameterError
 
 
 class UserRole(Enum):
@@ -16,65 +12,43 @@ class UserRole(Enum):
     MEMBER = "member"
 
 
+@dataclass(frozen=True)
 class FriendSender(Serializable):
     user_id: int
     nickname: str
-    sex: UserSex
     group_id: Optional[int]
 
-    def __init__(self, user_id: int, nickname: str, sex: UserSex, group_id: Optional[int] = None):
-        self.user_id = user_id
-        self.nickname = nickname
-        self.sex = sex
-        self.group_id = group_id
-
     def to_json(self) -> dict:
-        data = {
-            "user_id": self.user_id,
-            "nickname": self.nickname,
-            "sex": self.sex.value
-        }
-        if self.group_id is not None:
-            data["group_id"] = self.group_id
-        return data
+        raise NonSerializableError(f"This class is non-serializable")
 
     @classmethod
     def from_json(cls, json_dict: dict) -> "FriendSender":
-        return cls(json_dict["user_id"],
-                   json_dict["nickname"],
-                   UserSex(json_dict["sex"]),
-                   json_dict.get("group_id"))
+        try:
+            return cls(user_id=json_dict["user_id"],
+                       nickname=json_dict["nickname"],
+                       group_id=json_dict.get("group_id"))
+        except KeyError as e:
+            raise ParameterError(f"Missing required field: {e}") from e
 
 
+@dataclass(frozen=True)
 class GroupSender(Serializable):
     user_id: int
     nickname: str
-    sex: UserSex
     role: UserRole
     card: Optional[str]
 
-    def __init__(self, user_id: int, nickname: str, sex: UserSex, role: UserRole, card: Optional[str] = None):
-        self.user_id = user_id
-        self.nickname = nickname
-        self.sex = sex
-        self.role = role
-        self.card = card
-
     def to_json(self) -> dict:
-        data = {
-            "user_id": self.user_id,
-            "nickname": self.nickname,
-            "sex": self.sex.value,
-            "role": self.role.value,
-        }
-        if self.card is not None:
-            data["card"] = self.card
-        return data
+        raise NonSerializableError(f"This class is non-serializable")
 
     @classmethod
     def from_json(cls, json_dict: dict) -> "GroupSender":
-        return cls(json_dict["user_id"],
-                   json_dict["nickname"],
-                   UserSex(json_dict["sex"]),
-                   UserRole(json_dict["role"]),
-                   json_dict.get("card"))
+        try:
+            return cls(user_id=json_dict["user_id"],
+                       nickname=json_dict["nickname"],
+                       role=UserRole(json_dict["role"]),
+                       card=json_dict.get("card"))
+        except KeyError as e:
+            raise ParameterError(f"Missing required field: {e}") from e
+        except ValueError as e:
+            raise ParameterError(f"Invalid event type: {e}") from e

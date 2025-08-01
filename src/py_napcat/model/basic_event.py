@@ -5,7 +5,7 @@ from typing import ClassVar, Type
 
 from async_event_bus import AbstractEvent, EventBus
 
-from .exception import EventReceivedOnlyError, ParameterError, ParseError, ParserRegisteredError, UnregisteredEventError
+from .exception import NonSerializableError, ParameterError, ParseError, ParserRegisteredError, UnregisteredEventError
 
 event_bus: EventBus = EventBus()
 
@@ -43,7 +43,7 @@ class BasicEvent(Serializable, AbstractEvent):
         assert isinstance(self.time, int)
 
     def to_json(self) -> dict:
-        raise EventReceivedOnlyError(f"Events can only be accepted and not sent")
+        raise NonSerializableError(f"This class is non-serializable")
 
     @classmethod
     def from_json(cls, json_dict: dict) -> "BasicEvent":
