@@ -22,6 +22,26 @@ class ParseError(CustomError):
         super().__init__(message)
 
 
-class UnregisteredElementError(CustomError):
+class EventReceivedOnlyError(CustomError):
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+
+
+class UnregisteredError(CustomError):
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+
+
+class UnregisteredEventError(UnregisteredError):
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+
+
+class UnregisteredElementError(UnregisteredError):
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+
+
+class ParserRegisteredError(CustomError):
     def __init__(self, message: str) -> None:
         super().__init__(message)
